@@ -1,32 +1,96 @@
 Config = {}
 
---[[ General Configs ]]
+-- Framework Settings
 Config.Framework = 'standalone' -- 'esx', 'qbcore' or 'standalone'
-Config.RequireJob = false -- Do you want this to be only for players with a specific job? (True if yes, false if no. You must set framework to 'esx' or 'qbcore' for this feature)
-Config.JobName = 'mechanic' -- The job name required if Config.JobLock is true
-Config.StartJobPedModel = 'a_m_m_business_01' -- The model of the ped that starts the job
-Config.StartJobLocation = vec3(1242.0847, -3257.0403, 5.0288) -- The location at which you start the job (and the map blip location)
-Config.DeliverLocation = vec3(393.0399, -1617.5004, 29.2920) -- The location at which you deliver vehicles
-Config.DeliverRadius = 10 -- The radius at which the player must be within (in relation to DeliverLocation) to get paid for delivering
-Config.StartJobRadius = 50 -- The distance at which once a player is within the ped will spawn/be visable
-Config.StartJobPedHeading = 272.1205 -- The direction at which the start job ped is facing
-Config.SpawnTruckLocation = vector3(1247.0011, -3262.6636, 5.8075) -- The location at which the tow truck spawns to start the job
-Config.SpawnTruckHeading = 269.8075 -- The direction the tow truck being spawned is facing
-Config.EnableCarKeys = false -- This is for ESX/Standalone only, QBCore key system already works even when set to false
-Config.MinWaitTime = 1 -- The minimum wait time in minutes for a new job assignment
-Config.MaxWaitTime = 2 -- The maximum wait time in minutes for a new job assignment
+Config.RequireJob = false
+Config.JobName = 'mechanic'
+Config.Vehiclekeys = 'QBox'
 
---[[ Pay Conigs ]]
-Config.PayPerDelivery = 500 -- How much the player is paid per delivery completed
-Config.PayPerDeliveryAccount = 'money' -- Pay in cash with 'money' or to the bank with 'bank'
-Config.RandomPayPerDelivery = true -- Set true if you want randomized pay, set false for same amount (PayPerDelivery).
-Config.MinPayPerDelivery = 350 -- If Config.RandomPayPerDelivery = true then what is the minimum pay? (If RandomPay false, ignore this)
-Config.MaxPayPerDelivery = 950 -- If Config.RandomPayPerDelivery = true then what is the maxmimum pay? (If RandomPay false, ignore this)
+-- Core Job Settings
+Config.TowTruckModel = `flatbed`
+Config.StartJobPedModel = `a_m_m_business_01`
+Config.StartJobLocation = vec3(1242.0847, -3257.0403, 5.0288)
+Config.DeliverLocation = vec3(393.0399, -1617.5004, 29.2920)
+Config.DeliverRadius = 10
+Config.StartJobRadius = 50
+Config.StartJobPedHeading = 272.1205
+Config.SpawnTruckLocation = vector3(1247.0011, -3262.6636, 5.8075)
+Config.SpawnTruckHeading = 269.8075
+Config.MinWaitTime = 1
+Config.MaxWaitTime = 2
+Config.BlipClearDistance = 150.0
+Config.TowingRange = 5.0
+Config.JobCooldown = 10000
+Config.EmergencyCooldown = 5000
 
+-- Vehicle Settings
+Config.MinVehicleHealth = 100
+Config.MaxVehicleHealth = 400
+Config.DisableVehicleEngines = true
+Config.TowOffset = {x = -0.5, y = -5.0, z = 1.0}
+Config.TowRotation = {x = 0.0, y = 0.0, z = 0.0}
+Config.AttachBone = 20
+Config.AttachAnimationDuration = 5000
+Config.DetachAnimationDuration = 5000
+Config.DeliverAnimationDuration = 5000
+
+-- Payment Settings
+Config.PayPerDelivery = 500
+Config.PayPerDeliveryAccount = 'money'
+Config.RandomPayPerDelivery = true
+Config.MinPayPerDelivery = 350
+Config.MaxPayPerDelivery = 950
+Config.EmergencyPayMultiplier = 1.5
+Config.RepairCost = 150
+Config.MaintenanceCost = 100
+
+-- Feature Toggles
+Config.EnableStats = true
+Config.PersistentStats = true
+Config.SpawnStartJobNPC = true
+Config.ShowStartJobMarker = false
+Config.ShowJobSearchNotification = false
+Config.EmergencyEffects = true
+Config.UseRadioSystem = true
+Config.UseInteractSound = false
+Config.EnableForcedTowMode = true
+Config.CleanupAbandonedTows = true
+Config.EnableDispatchHotkey = true
+Config.EnableServerLogs = true
+
+-- Animation Settings
+Config.AnimDict = 'mini@repair'
+Config.AnimName = 'fixing_a_ped'
+Config.RepairDuration = 10000
+Config.MaintenanceDuration = 8000
+Config.AbandonDistance = 3000
+
+-- Commands & Keybinds
+Config.DispatchCommand = 'towtruck'
+Config.DispatchKeybind = 'F6'
+Config.RadioKeybind = 'F7'
+Config.JobMenuCommand = 'towmenu'
+
+-- Security Settings
+Config.MaxInteractionDistance = 10.0
+Config.VehicleCleanupTime = 3600
+Config.JobVehicleTimeout = 1800
+Config.TowedVehicleTimeout = 1800
+
+-- Emergency Locations
+Config.EmergencyLocations = {
+    vector4(233.4, -779.2, 30.6, 69.3),
+    vector4(1156.6, -1643.5, 36.9, 213.1),
+    vector4(-511.8, -1075.4, 23.5, 88.7),
+    vector4(384.2, -1631.8, 29.3, 320.4),
+    vector4(-1194.6, -876.3, 13.4, 121.6)
+}
+
+-- Map Blips
 Config.Blips = {
     startJob = {
-        blipSprite = 477, -- https://docs.fivem.net/docs/game-references/blips/
-        blipColor = 21, -- https://docs.fivem.net/docs/game-references/blips/#blip-colors
+        blipSprite = 477,
+        blipColor = 21,
         blipScale = 0.7,
         blipName = 'Towing'
     },
@@ -44,7 +108,7 @@ Config.Blips = {
     }
 }
 
---[[ Car Spawns - Must Follow Format ]]
+-- Vehicle Spawn Locations
 Config.Locations = {
     { x = 1015.3276, y = -2462.3572, z = 27.7853, h = 82.8159 },
     { x = -247.7807, y = -1687.8434, z = 33.4754, h = 178.8647 },
@@ -59,27 +123,27 @@ Config.Locations = {
     { x = -1483.1953, y = -895.6342, z = 9.7399, h = 64.1165 }
 }
 
---[[ Car Models ]]
+-- Vehicle Models
 Config.CarModels = {
-    'felon',
-    'prairie',
-    'baller',
-    'sentinel',
-    'zion',
-    'ruiner',
-    'asea',
-    'ingot',
-    'intruder',
-    'primo',
-    'stratum',
-    'tailgater'
+    `felon`,
+    `prairie`,
+    `baller`,
+    `sentinel`,
+    `zion`,
+    `ruiner`,
+    `asea`,
+    `ingot`,
+    `intruder`,
+    `primo`,
+    `stratum`,
+    `tailgater`
 }
 
---[[ String Configs ]]
+-- Notification Settings
 Notifications = {
-    position = 'top', -- The position of all notifications
-    icon = 'truck-ramp-box', -- The icon displayed for all notifications
-    title = 'Tow Truck', -- The title for all notifications
+    position = 'top',
+    icon = 'truck-ramp-box',
+    title = 'Tow Truck',
     notAuthorized = 'You are not authorized to perform this job - you must be a ' ..Config.JobName,
     successfulVehicleLoad = 'You have successfully loaded the vehicle onto the Tow Truck',
     cancelledVehicleLoad = 'You cancelled loading the vehicle',
@@ -96,8 +160,9 @@ Notifications = {
     jobAssigned = 'A new job is available - your GPS was updated'
 }
 
+-- Target Settings
 Target = {
-    distance = 2, -- The radius at which target options are visable from the target for all target options
+    distance = 2,
     loadVehicle = 'Load vehicle',
     loadVehicleIcon = 'fas fa-truck-ramp-box',
     unloadVehicle = 'Unload vehicle',
@@ -106,30 +171,18 @@ Target = {
     startJobIcon = 'fas fa-truck'
 }
 
+-- Context Menu Settings
 ContextMenu = {
     menuTitle = 'Towing',
     towTruckTitle = 'Tow Truck',
     towTruckDescription = 'Receive your Tow Truck then Clock In to begin work',
     towTruckIcon = 'truck',
     clockInTitle = 'Clock In',
-    clockInDescription = 'Show yourself as on-duty & ready to receive calls', -- This description displays whilst not clocked in
-    clockInDescription2 = 'You are already on-duty & receiving calls', -- This description displays whilst clocked in
+    clockInDescription = 'Show yourself as on-duty & ready to receive calls',
+    clockInDescription2 = 'You are already on-duty & receiving calls',
     clockInIcon = 'clock',
     clockOutTitle = 'Clock Out',
-    clockOutDescription = 'Return your truck and go off-duty', -- This description displays whilst clocked in
-    clockOutDescription2 = 'You\'re not clocked in', -- This description displays whilst not clocked in
+    clockOutDescription = 'Return your truck and go off-duty',
+    clockOutDescription2 = 'You\'re not clocked in',
     clockOutIcon = 'clock'
-}
-
-ProgressCircle = {
-    position = 'middle', -- The position for all Progress Circles
-    loadVehicleLabel = 'Loading vehicle..',
-    loadVehicleDuration = 5000,
-    unloadVehicleLabel = 'Unloading vehicle..',
-    unloadVehicleDuration = 5000
-}
-
-AlertDialog = {
-    header = 'Towing',
-    content = 'Thank you for delivering the vehicle to the impound. Would you like to continue?',
 }

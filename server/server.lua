@@ -5,8 +5,26 @@ local state = {
     activeJobVehicles = {},
     towedVehicles = {},
     activeTowDrivers = {},
-    jobPeds = {}
+    jobPeds = {},
+    rateLimits = {}
 }
+
+local function isRateLimited(playerId, eventName, cooldownMs)
+    if not playerId or not eventName then return true end
+    
+    local playerLimits = state.rateLimits[playerId] or {}
+    local currentTime = GetGameTimer()
+    local lastExecutionTime = playerLimits[eventName] or 0
+    
+    if (currentTime - lastExecutionTime) < cooldownMs then
+        return true
+    end
+    
+    playerLimits[eventName] = currentTime
+    state.rateLimits[playerId] = playerLimits
+    
+    return false
+end
 
 local function loadFramework()
     if Config.Framework == 'qbcore' then
@@ -14,7 +32,7 @@ local function loadFramework()
     elseif Config.Framework == 'esx' then
         ESX = exports['es_extended']:getSharedObject()
     elseif Config.Framework == 'qbx' then
-        QBX = {}
+        QBX = exports.qbx_core
     end
 end
 
@@ -53,7 +71,7 @@ local function GetPlayerIdentifier(src)
         local xPlayer = ESX.GetPlayerFromId(src)
         if xPlayer then identifier = xPlayer.identifier end
     elseif Config.Framework == 'qbx' then
-        local Player = exports.qbx_core:GetPlayer(src)
+        local Player = QBX:GetPlayer(src)
         if Player then identifier = Player.PlayerData.citizenid end
     else
         for _, v in pairs(GetPlayerIdentifiers(src)) do
@@ -119,7 +137,7 @@ local function GivePlayerMoney(src, amount, account)
             return true
         end
     elseif Config.Framework == 'qbx' then
-        return exports.qbx_core:AddMoney(src, account or Config.PayPerDeliveryAccount, amount)
+        return QBX:AddMoney(src, account or Config.PayPerDeliveryAccount, amount)
     else
         TriggerClientEvent('lation_towtruck:receivedPayment', src, amount)
         return true
@@ -146,9 +164,9 @@ local function RemovePlayerMoney(src, amount, account)
             return true
         end
     elseif Config.Framework == 'qbx' then
-        local playerMoney = exports.qbx_core:GetMoney(src, account or Config.PayPerDeliveryAccount)
+        local playerMoney = QBX:GetMoney(src, account or Config.PayPerDeliveryAccount)
         if playerMoney and playerMoney >= amount then
-            return exports.qbx_core:RemoveMoney(src, account or Config.PayPerDeliveryAccount, amount)
+            return QBX:RemoveMoney(src, account or Config.PayPerDeliveryAccount, amount)
         end
     else
         return true
@@ -280,6 +298,11 @@ end)
 lib.callback.register('lation_towtruck:spawnTowTruck', function(source)
     local src = source
     
+    if isRateLimited(src, 'spawnTowTruck', 5000) then
+        LogSecurityEvent(src, 'SpawnTowTruck', 'Rate limited')
+        return nil
+    end
+    
     if state.activeTowDrivers[src] and state.activeTowDrivers[src].towTruckNetId then
         local vehicle = NetworkGetEntityFromNetworkId(state.activeTowDrivers[src].towTruckNetId)
         if DoesEntityExist(vehicle) then
@@ -307,9 +330,11 @@ lib.callback.register('lation_towtruck:spawnTowTruck', function(source)
         timestamp = os.time()
     }
     
-    if state.activeTowDrivers[src] then
-        state.activeTowDrivers[src].towTruckNetId = netId
+    if not state.activeTowDrivers[src] then
+        state.activeTowDrivers[src] = {}
     end
+    
+    state.activeTowDrivers[src].towTruckNetId = netId
     
     GiveVehicleKey(src, GetVehicleNumberPlateText(vehicle))
     
@@ -414,11 +439,12 @@ lib.callback.register('lation_towtruck:checkJob', function(source)
             hasJob = xPlayer.job.name == Config.JobName
         end
     elseif Config.Framework == 'qbx' then
-        hasJob = exports.qbx_core:HasPrimaryGroup(src, Config.JobName)
+        hasJob = QBX:HasPrimaryGroup(src, Config.JobName)
     end
     
     return hasJob
 end)
+
 lib.callback.register('lation_towtruck:checkTowTruck', function(source, netId)
     return state.activeTowTrucks[netId] ~= nil
 end)
@@ -426,12 +452,20 @@ end)
 lib.callback.register('lation_towtruck:clockIn', function(source)
     local src = source
     
+    if isRateLimited(src, 'clockIn', 3000) then
+        LogSecurityEvent(src, 'ClockIn', 'Rate limited')
+        return false
+    end
+    
     if state.activeTowDrivers[src] and state.activeTowDrivers[src].onDuty then
         LogSecurityEvent(src, 'ClockIn', 'Already clocked in')
         return false
     end
     
-    state.activeTowDrivers[src] = state.activeTowDrivers[src] or {}
+    if not state.activeTowDrivers[src] then
+        state.activeTowDrivers[src] = {}
+    end
+    
     state.activeTowDrivers[src].onDuty = true
     state.activeTowDrivers[src].timestamp = os.time()
     state.activeTowDrivers[src].lastJob = 0
@@ -441,6 +475,11 @@ end)
 
 lib.callback.register('lation_towtruck:clockOut', function(source)
     local src = source
+    
+    if isRateLimited(src, 'clockOut', 3000) then
+        LogSecurityEvent(src, 'ClockOut', 'Rate limited')
+        return false
+    end
     
     if not state.activeTowDrivers[src] or not state.activeTowDrivers[src].onDuty then
         LogSecurityEvent(src, 'ClockOut', 'Not clocked in')
@@ -465,6 +504,11 @@ end)
 lib.callback.register('lation_towtruck:repairVehicle', function(source, vehicleNetId, cost)
     local src = source
     
+    if isRateLimited(src, 'repairVehicle', 3000) then
+        LogSecurityEvent(src, 'RepairVehicle', 'Rate limited')
+        return false
+    end
+    
     if not VerifyVehicleAccess(src, vehicleNetId) then
         LogSecurityEvent(src, 'RepairVehicle', 'No access to vehicle')
         return false
@@ -487,6 +531,11 @@ end)
 
 lib.callback.register('lation_towtruck:maintainVehicle', function(source, vehicleNetId, cost)
     local src = source
+    
+    if isRateLimited(src, 'maintainVehicle', 3000) then
+        LogSecurityEvent(src, 'MaintainVehicle', 'Rate limited')
+        return false
+    end
     
     if not VerifyVehicleAccess(src, vehicleNetId) then
         LogSecurityEvent(src, 'MaintainVehicle', 'No access to vehicle')
@@ -512,6 +561,11 @@ end)
 
 lib.callback.register('lation_towtruck:deliverVehicle', function(source, vehicleNetId, isEmergency)
     local src = source
+    
+    if isRateLimited(src, 'deliverVehicle', 3000) then
+        LogSecurityEvent(src, 'DeliverVehicle', 'Rate limited')
+        return false
+    end
     
     if not state.towedVehicles[vehicleNetId] or state.towedVehicles[vehicleNetId].tower ~= src then
         LogSecurityEvent(src, 'DeliverVehicle', 'Not tower of vehicle')
@@ -581,6 +635,11 @@ end)
 RegisterNetEvent('lation_towtruck:startTowing', function(towTruckNetId, vehicleNetId)
     local src = source
     
+    if isRateLimited(src, 'startTowing', 3000) then
+        LogSecurityEvent(src, 'StartTowing', 'Rate limited')
+        return
+    end
+    
     if not towTruckNetId or not vehicleNetId then
         LogSecurityEvent(src, 'StartTowing', 'Missing network IDs')
         return
@@ -649,6 +708,11 @@ end)
 RegisterNetEvent('lation_towtruck:stopTowing', function(vehicleNetId)
     local src = source
     
+    if isRateLimited(src, 'stopTowing', 2000) then
+        LogSecurityEvent(src, 'StopTowing', 'Rate limited')
+        return
+    end
+    
     if not vehicleNetId then
         LogSecurityEvent(src, 'StopTowing', 'Missing network ID')
         return
@@ -687,6 +751,11 @@ end)
 
 RegisterNetEvent('lation_towtruck:requestJob', function(isEmergency)
     local src = source
+    
+    if isRateLimited(src, 'requestJob', 1000) then
+        LogSecurityEvent(src, 'RequestJob', 'Rate limited')
+        return
+    end
     
     if not state.activeTowDrivers[src] or not state.activeTowDrivers[src].onDuty then
         LogSecurityEvent(src, 'RequestJob', 'Not on duty')
@@ -734,7 +803,7 @@ RegisterNetEvent('lation_towtruck:requestJob', function(isEmergency)
         SetVehicleEngineOn(vehicle, false, false, true)
     end
     
-if isEmergency and Config.EmergencyEffects then
+    if isEmergency and Config.EmergencyEffects then
         SetVehicleLights(vehicle, 2)
         SetVehicleAlarm(vehicle, true)
         StartVehicleAlarm(vehicle)
@@ -759,6 +828,11 @@ end)
 RegisterNetEvent('lation_towtruck:abandonJob', function()
     local src = source
     
+    if isRateLimited(src, 'abandonJob', 3000) then
+        LogSecurityEvent(src, 'AbandonJob', 'Rate limited')
+        return
+    end
+    
     for netId, data in pairs(state.activeJobVehicles) do
         if data.owner == src and not data.tower then
             local vehicle = NetworkGetEntityFromNetworkId(netId)
@@ -776,6 +850,11 @@ end)
 
 RegisterNetEvent('lation_towtruck:deleteTowTruck', function(netId)
     local src = source
+    
+    if isRateLimited(src, 'deleteTowTruck', 3000) then
+        LogSecurityEvent(src, 'DeleteTowTruck', 'Rate limited')
+        return
+    end
     
     if not state.activeTowTrucks[netId] or state.activeTowTrucks[netId].owner ~= src then
         LogSecurityEvent(src, 'DeleteTowTruck', 'Not owner of vehicle')
@@ -803,17 +882,22 @@ RegisterNetEvent('lation_towtruck:saveStats', function(stats)
     
     if not Config.EnableStats then return end
     
+    if isRateLimited(src, 'saveStats', 10000) then
+        LogSecurityEvent(src, 'SaveStats', 'Rate limited')
+        return
+    end
+    
     local identifier = GetPlayerIdentifier(src)
     if not identifier then return end
     
     if Config.PersistentStats then
         MySQL.Async.execute('UPDATE lation_towing SET vehicles_towed = ?, emergency_jobs = ?, civilian_jobs = ?, total_earned = ?, distance_driven = ?, repairs_performed = ? WHERE player_identifier = ?', {
-            stats.vehiclesTowedCount,
-            stats.emergencyJobsCompleted,
-            stats.civilianJobsCompleted,
-            stats.totalEarned,
-            stats.distanceDriven,
-            stats.repairsPerformed,
+            tonumber(stats.vehiclesTowedCount) or 0,
+            tonumber(stats.emergencyJobsCompleted) or 0,
+            tonumber(stats.civilianJobsCompleted) or 0,
+            tonumber(stats.totalEarned) or 0,
+            tonumber(stats.distanceDriven) or 0,
+            tonumber(stats.repairsPerformed) or 0,
             identifier
         })
     end
@@ -824,12 +908,17 @@ RegisterNetEvent('lation_towtruck:updateDistance', function(distance)
     
     if not Config.EnableStats or not distance then return end
     
+    if isRateLimited(src, 'updateDistance', 10000) then
+        LogSecurityEvent(src, 'UpdateDistance', 'Rate limited')
+        return
+    end
+    
     local identifier = GetPlayerIdentifier(src)
     if not identifier then return end
     
     if Config.PersistentStats then
         MySQL.Async.execute('UPDATE lation_towing SET distance_driven = ? WHERE player_identifier = ?', {
-            distance,
+            tonumber(distance) or 0,
             identifier
         })
     end
@@ -865,10 +954,23 @@ AddEventHandler('playerDropped', function()
 end)
 
 CreateThread(function()
+    local lastCleanup = GetGameTimer()
+    
     while true do
-        Wait(60000) 
+        Wait(60000)
         
         local currentTime = os.time()
+        local playerCount = #GetPlayers()
+        local cleanupInterval = playerCount > 30 and 30000 or 60000
+        
+        if GetGameTimer() - lastCleanup < cleanupInterval then
+            goto continue
+        end
+        
+        lastCleanup = GetGameTimer()
+        
+        local vehiclesCleaned = 0
+        local towTrucksCleaned = 0
         
         for netId, data in pairs(state.activeTowTrucks) do
             local playerId = data.owner
@@ -876,9 +978,10 @@ CreateThread(function()
             if not GetPlayerName(playerId) or currentTime - data.timestamp > Config.VehicleCleanupTime then
                 local vehicle = NetworkGetEntityFromNetworkId(netId)
                 
-                if DoesEntityExist(vehicle) and not IsPedInVehicle(GetPlayerPed(playerId), vehicle, false) then
+                if DoesEntityExist(vehicle) and (not GetPlayerName(playerId) or not IsPedInVehicle(GetPlayerPed(playerId), vehicle, false)) then
                     DeleteEntity(vehicle)
                     state.activeTowTrucks[netId] = nil
+                    towTrucksCleaned = towTrucksCleaned + 1
                     
                     if Config.EnableServerLogs then
                         print(string.format('[lation_towtruck] Cleaned up abandoned tow truck %s', netId))
@@ -905,6 +1008,7 @@ CreateThread(function()
                     end
                     
                     DeleteEntity(vehicle)
+                    vehiclesCleaned = vehiclesCleaned + 1
                 end
                 
                 state.activeJobVehicles[netId] = nil
@@ -931,6 +1035,13 @@ CreateThread(function()
                 end
             end
         end
+        
+        if Config.EnableServerLogs and (vehiclesCleaned > 0 or towTrucksCleaned > 0) then
+            print(string.format('[lation_towtruck] Cleanup completed: %d job vehicles, %d tow trucks', 
+                vehiclesCleaned, towTrucksCleaned))
+        end
+        
+        ::continue::
     end
 end)
 

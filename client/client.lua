@@ -18,7 +18,8 @@ local state = {
     jobZone = nil,
     deliveryZone = nil,
     lastCoords = nil,
-    animDicts = {}
+    animDicts = {},
+    rateLimits = {}
 }
 
 local playerStats = {
@@ -29,6 +30,20 @@ local playerStats = {
     distanceDriven = 0,
     repairsPerformed = 0
 }
+
+local function isRateLimited(action, cooldownMs)
+    cooldownMs = cooldownMs or 1000
+    local currentTime = GetGameTimer()
+    local lastTime = state.rateLimits[action] or 0
+    
+    if (currentTime - lastTime) < cooldownMs then
+        return true
+    end
+    
+    state.rateLimits[action] = currentTime
+    return false
+end
+
 local function loadFramework()
     if Config.Framework == 'qbcore' then
         QBCore = exports['qb-core']:GetCoreObject()
@@ -69,6 +84,7 @@ end
 
 local function FetchPlayerStats()
     if not Config.EnableStats then return end
+    
     local stats = lib.callback.await('lation_towtruck:getPlayerStats', false)
     if stats then
         playerStats = stats
@@ -76,6 +92,8 @@ local function FetchPlayerStats()
 end
 
 local function showNotification(message, type)
+    if isRateLimited('notification', 300) then return end
+    
     lib.notify({
         title = Notifications.title,
         description = message,
@@ -124,6 +142,8 @@ end
 local function playAnimation(dict, anim, duration)
     if not dict or not anim or not duration then return false end
     
+    if isRateLimited('animation_' .. dict .. anim, 500) then return false end
+    
     if not state.animDicts[dict] then
         local success = lib.requestAnimDict(dict, 1000)
         if not success then
@@ -133,16 +153,25 @@ local function playAnimation(dict, anim, duration)
         state.animDicts[dict] = true
     end
     
+    if IsEntityPlayingAnim(cache.ped, dict, anim, 3) then
+        ClearPedTasks(cache.ped)
+        Wait(100)
+    end
+    
     TaskPlayAnim(cache.ped, dict, anim, 8.0, -8.0, duration, 49, 0, false, false, false)
+    
     lib.setTimeout(duration, function()
         if IsEntityPlayingAnim(cache.ped, dict, anim, 3) then
             ClearPedTasks(cache.ped)
         end
     end)
+    
     return true
 end
 
 local function toggleRadio(status)
+    if isRateLimited('toggleRadio', 1000) then return end
+    
     state.radioActive = status
     if Config.UseInteractSound and state.radioActive then
         TriggerServerEvent('InteractSound_SV:PlayOnSource', 'towradio', 0.1)
@@ -151,6 +180,8 @@ local function toggleRadio(status)
 end
 
 local function attachVehicle(towTruck, vehicle)
+    if isRateLimited('attachVehicle', 2000) then return false end
+    
     if not towTruck or not vehicle or not IsEntityAVehicle(towTruck) or not IsEntityAVehicle(vehicle) then
         showNotification('Invalid vehicles for towing', 'error')
         return false
@@ -184,6 +215,8 @@ local function attachVehicle(towTruck, vehicle)
 end
 
 local function detachVehicle()
+    if isRateLimited('detachVehicle', 2000) then return false end
+    
     if not state.isTowing or not state.targetVehicle then
         showNotification(Notifications.noVehicleToUnload, 'error')
         return false
@@ -208,6 +241,8 @@ local function detachVehicle()
 end
 
 local function deliverVehicle()
+    if isRateLimited('deliverVehicle', 3000) then return false end
+    
     if not state.isTowing or not state.targetVehicle then
         showNotification(Notifications.noVehicleToUnload, 'error')
         return false
@@ -264,6 +299,8 @@ local function deliverVehicle()
 end
 
 local function repairVehicle()
+    if isRateLimited('repairVehicle', 3000) then return false end
+    
     if not state.targetVehicle then
         showNotification('No vehicle to repair', 'error')
         return false
@@ -291,6 +328,8 @@ local function repairVehicle()
 end
 
 local function maintainTruck()
+    if isRateLimited('maintainTruck', 3000) then return false end
+    
     if not state.towingVehicle then
         showNotification('No tow truck to maintain', 'error')
         return false
@@ -313,6 +352,8 @@ local function maintainTruck()
 end
 
 local function spawnTowTruck()
+    if isRateLimited('spawnTowTruck', 5000) then return nil end
+    
     local isJobAuthorized = hasRequiredJob()
     if not isJobAuthorized then
         showNotification(Notifications.notAuthorized, 'error')
@@ -335,6 +376,8 @@ local function spawnTowTruck()
 end
 
 local function clockIn()
+    if isRateLimited('clockIn', 3000) then return false end
+    
     local isJobAuthorized = hasRequiredJob()
     if not isJobAuthorized then
         showNotification(Notifications.notAuthorized, 'error')
@@ -361,6 +404,8 @@ local function clockIn()
 end
 
 local function clockOut()
+    if isRateLimited('clockOut', 3000) then return false end
+    
     if not lib.callback.await('lation_towtruck:clockOut', false) then
         showNotification('Failed to clock out', 'error')
         return false
@@ -389,6 +434,8 @@ local function clockOut()
 end
 
 local function CreateTowMenu()
+    if isRateLimited('showMenu', 1000) then return end
+    
     lib.registerContext({
         id = 'tow_main_menu',
         title = ContextMenu.menuTitle,
@@ -433,7 +480,8 @@ local function CreateTowMenu()
                 disabled = not Config.EnableStats,
                 onSelect = function()
                     if not Config.EnableStats then return end
-                    lib.registerContext({
+                    
+lib.registerContext({
                         id = 'towing_stats',
                         title = 'Towing Statistics',
                         options = {
@@ -450,7 +498,7 @@ local function CreateTowMenu()
                                 disabled = true
                             },
                             {
-                                title = 'Total Earned: $' .. playerStats.totalEarned,
+                                title = 'Total Earned: ' .. playerStats.totalEarned,
                                 disabled = true
                             },
                             {
@@ -472,6 +520,8 @@ local function CreateTowMenu()
 end
 
 local function CreateJobDialog()
+    if isRateLimited('jobDialog', 1000) then return end
+    
     lib.registerContext({
         id = 'tow_job_continuation',
         title = 'Towing Job',
@@ -637,36 +687,41 @@ local function SetupZones()
 end
 
 local function TrackDistance()
-    if Config.EnableStats and state.onDuty and state.towingVehicle and DoesEntityExist(state.towingVehicle) then
-        if cache.vehicle == state.towingVehicle and cache.seat == -1 then
-            if state.lastCoords then
-                local distance = #(cache.coords - state.lastCoords)
-                if distance > 5.0 then
-                    state.distanceAccumulator = state.distanceAccumulator + distance
-                    state.lastCoords = cache.coords
-                    playerStats.distanceDriven = playerStats.distanceDriven + distance
-                    
-                    local currentTime = GetGameTimer()
-                    if state.distanceAccumulator > 200.0 or (currentTime - state.lastUpdateTime) > 60000 then
-                        TriggerServerEvent('lation_towtruck:updateDistance', playerStats.distanceDriven)
-                        state.distanceAccumulator = 0
-                        state.lastUpdateTime = currentTime
-                    end
-                end
-            else
-                state.lastCoords = cache.coords
-            end
+    if not Config.EnableStats or not state.onDuty or not state.towingVehicle or not DoesEntityExist(state.towingVehicle) then 
+        return 
+    end
+    
+    if cache.vehicle ~= state.towingVehicle or cache.seat ~= -1 then 
+        state.lastCoords = nil
+        return 
+    end
+    
+    if not state.lastCoords then
+        state.lastCoords = cache.coords
+        return
+    end
+    
+    local distance = #(cache.coords - state.lastCoords)
+    if distance > 5.0 then
+        state.distanceAccumulator = state.distanceAccumulator + distance
+        state.lastCoords = cache.coords
+        playerStats.distanceDriven = playerStats.distanceDriven + distance
+        
+        local currentTime = GetGameTimer()
+        if state.distanceAccumulator > 200.0 or (currentTime - state.lastUpdateTime) > 60000 then
+            TriggerServerEvent('lation_towtruck:updateDistance', playerStats.distanceDriven)
+            state.distanceAccumulator = 0
+            state.lastUpdateTime = currentTime
         end
     end
 end
 
 local function HandleKeypress()
     if IsControlJustPressed(0, 38) then
-        if state.isTowing and state.targetVehicle and #(cache.coords - Config.DeliverLocation) < Config.DeliverRadius and cache.vehicle == state.towingVehicle and cache.seat == -1 then
+        if state.isTowing and state.targetVehicle and cache.vehicle == state.towingVehicle and 
+           cache.seat == -1 and #(cache.coords - Config.DeliverLocation) < Config.DeliverRadius then
             deliverVehicle()
-        end
-        
-        if hasRequiredJob() and #(cache.coords - Config.StartJobLocation) < 3.0 and not cache.vehicle then
+        elseif hasRequiredJob() and #(cache.coords - Config.StartJobLocation) < 3.0 and not cache.vehicle then
             CreateTowMenu()
         end
     end
@@ -684,25 +739,25 @@ local function InitializeTowingSystem()
     end
     
     RegisterCommand(Config.DispatchCommand, function()
-        if hasRequiredJob() and state.onDuty and not state.jobActive then
+        if hasRequiredJob() and state.onDuty and not state.jobActive and not isRateLimited('dispatchCommand', 1000) then
             TriggerServerEvent('lation_towtruck:requestJob', false)
         end
     end, false)
     
     RegisterCommand('towemergency', function()
-        if hasRequiredJob() and state.onDuty and not state.jobActive then
+        if hasRequiredJob() and state.onDuty and not state.jobActive and not isRateLimited('emergencyCommand', 1000) then
             TriggerServerEvent('lation_towtruck:requestJob', true)
         end
     end, false)
     
     RegisterCommand(Config.JobMenuCommand, function()
-        if hasRequiredJob() then
+        if hasRequiredJob() and not isRateLimited('jobMenuCommand', 1000) then
             CreateTowMenu()
         end
     end, false)
     
     RegisterCommand('towradio', function()
-        if hasRequiredJob() then
+        if hasRequiredJob() and not isRateLimited('radioCommand', 1000) then
             toggleRadio(not state.radioActive)
         end
     end, false)
@@ -722,12 +777,19 @@ local function InitializeTowingSystem()
         
         if state.jobZone then
             state.jobZone:remove()
+            state.jobZone = nil
         end
         
         if state.deliveryZone then
             state.deliveryZone:remove()
+            state.deliveryZone = nil
         end
         
+        for dict in pairs(state.animDicts) do
+            RemoveAnimDict(dict)
+        end
+        
+        state.animDicts = {}
         lib.hideTextUI()
     end
 end
@@ -737,8 +799,10 @@ lib.onCache('vehicle', function(vehicle, oldVehicle)
         state.lastCoords = nil
     end
     
-    if state.deliveryZone and state.isTowing and state.targetVehicle then
-        if vehicle == state.towingVehicle and IsEntityInZone(cache.ped, state.deliveryZone) then
+    if not state.deliveryZone then return end
+    
+    if state.isTowing and state.targetVehicle then
+        if vehicle == state.towingVehicle and cache.seat == -1 and IsEntityInZone(cache.ped, state.deliveryZone) then
             lib.showTextUI('[E] Deliver Vehicle', {position = 'top-center'})
         else
             lib.hideTextUI()
@@ -747,9 +811,11 @@ lib.onCache('vehicle', function(vehicle, oldVehicle)
 end)
 
 lib.onCache('seat', function(seat)
-    if state.deliveryZone and state.isTowing and state.targetVehicle and cache.vehicle == state.towingVehicle then
+    if not state.deliveryZone then return end
+    
+    if state.isTowing and state.targetVehicle and cache.vehicle == state.towingVehicle then
         if seat == -1 and IsEntityInZone(cache.ped, state.deliveryZone) then
-            lib.showTextUI('[E] Deliver Vehicle', {position = 'top-center'})
+            lib.showTextUI('[E] Deliver Vehicle', {position 'top-center'})
         else
             lib.hideTextUI()
         end
@@ -757,7 +823,7 @@ lib.onCache('seat', function(seat)
 end)
 
 RegisterNetEvent('lation_towtruck:receivedPayment', function(amount)
-    showNotification('You received $' .. amount .. ' for your service', 'success')
+    showNotification('You received'  .. amount .. 'for your service', 'success')
 end)
 
 RegisterNetEvent('lation_towtruck:vehicleTowState', function(netId, towTruckNetId, towState)
@@ -767,9 +833,11 @@ RegisterNetEvent('lation_towtruck:vehicleTowState', function(netId, towTruckNetI
     if not vehicle or not DoesEntityExist(vehicle) then return end
     
     if towState then
-        state.isTowing = true
-        state.targetVehicle = vehicle
-        state.towingVehicle = towTruck
+        if vehicle == state.targetVehicle or towTruck == state.towingVehicle then
+            state.isTowing = true
+            state.targetVehicle = vehicle
+            state.towingVehicle = towTruck
+        end
         SetEntityAlpha(vehicle, 200, false)
     else
         if vehicle == state.targetVehicle then
@@ -840,8 +908,8 @@ CreateThread(function()
         end
         
         if Config.CleanupAbandonedTows and state.jobActive then
-            if (state.towBlip and DoesBlipExist(state.towBlip)) then
-                local blipCoords = GetBlipCoords(state.towBlip)
+            if (state.towBlip and DoesBlipExist(state.towBlip)) or (state.emergencyBlip and DoesBlipExist(state.emergencyBlip)) then
+                local blipCoords = state.towBlip and GetBlipCoords(state.towBlip) or GetBlipCoords(state.emergencyBlip)
                 if #(cache.coords - blipCoords) > Config.BlipClearDistance and GetGameTimer() - state.lastJobTime > Config.AbandonDistance then
                     TriggerServerEvent('lation_towtruck:abandonJob')
                     state.jobActive = false

@@ -1,22 +1,22 @@
--- Discord: https://discord.gg/9EbY4nM5uu
 
 fx_version 'cerulean'
 game 'gta5'
 lua54 'yes'
 
 author 'iamlation'
-description 'A fun & simple standalone towing job for FiveM'
-version '1.0.3'
+description 'An advanced tow truck resource designed for ESX/QBCore/Qbox with a focus on performance and ease of use.'
+version '2.0.0'
 
 client_scripts {
     'client/*.lua',
 }
 
 server_scripts {
-    'server/*.lua',
+    '@oxmysql/lib/MySQL.lua',
+    'server/*.lua'
 }
 
 shared_scripts {
+    '@ox_lib/init.lua',
     'config.lua',
-    '@ox_lib/init.lua'
 }

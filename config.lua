@@ -1,10 +1,11 @@
 Config = {}
 
 -- Framework Settings
-Config.Framework = 'standalone' -- 'esx', 'qbcore' or 'standalone'
+Config.Framework = 'qbx' -- 'esx', 'qbcore' or 'qbx'
 Config.RequireJob = false
 Config.JobName = 'mechanic'
 Config.Vehiclekeys = 'QBox'
+Config.AutoRunSQL = true
 
 -- Core Job Settings
 Config.TowTruckModel = `flatbed`

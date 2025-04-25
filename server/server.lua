@@ -1,6 +1,5 @@
 local QBCore, ESX, QBX = nil, nil, nil
 local MySQL = exports.oxmysql
-
 local state = {
     activeTowTrucks = {},
     activeJobVehicles = {},
@@ -9,7 +8,6 @@ local state = {
     jobPeds = {},
     rateLimits = {}
 }
-
 local function isRateLimited(playerId, eventName, cooldownMs) -- Some security xchecking 
     if not playerId or not eventName then return true end
 
